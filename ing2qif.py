@@ -1,4 +1,32 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+"""
+Converts bank statements downloaded as Excel files (.xls/.xlsx) from
+ING Spain (ING BANK NV, Sucursal en España) into the QIF
+(Quicken Interchange Format).
+
+This script parses the specific structure of ING's Excel export,
+extracts transaction details (date, amount, description, category, comment),
+attempts to intelligently determine the Payee (beneficiary) from the
+description (using 'all caps' detection or fallback to remaining text),
+maps CATEGORÍA and SUBCATEGORÍA to the QIF category field (L),
+and includes the original comment plus a transaction type keyword (e.g., 'Tipo: Bizum')
+extracted from common description prefixes in the QIF memo field (M).
+
+Includes data validation (date range, valid amount) and a verbose mode
+for debugging.
+
+Requires pandas, xlrd, and openpyxl. Install with:
+pip install pandas xlrd openpyxl
+"""
+
+__author__ = "https://github.com/egofer"
+__license__ = "MIT"
+__version__ = "0.1"
+__status__ = "Development"
+__date__ = "April, 2024"
+
 import datetime
 import re
 import argparse
@@ -17,7 +45,7 @@ COL_MAP = {
 }
 REQUIRED_COLS_INTERNAL = ['date', 'description', 'amount']
 
-# --- Compilación de Regex ---
+# --- Compilación de regex ---
 PREFIX_PATTERN = re.compile(
     r"^(?:(Pago)\s+en\s+|(Bizum)\s+(?:recibido(?:\s+de)?|enviado(?:\s+a)?)\s+|(Transferencia)\s+(?:recibida(?:\s+de)?|internacional\s+emitida\s+[A-Z]\d+)\s+|(Devolución)\s+Tarjeta\s+)", re.VERBOSE | re.IGNORECASE)
 # ALL_CAPS_PATTERN ahora solo intenta hacer match, la lógica decide si usarlo
@@ -44,7 +72,7 @@ def parse_arguments():
 
 
 def parse_spanish_decimal(decimal_val, row_num, verbose=False):
-    """Convierte valor a Decimal, manejando formato español. Devuelve None si falla."""
+    """Convierte valor a decimal, manejando formato español. Devuelve None si falla."""
     if pd.isna(decimal_val):
         if verbose:
             print(f"  [DEBUG] Fila {row_num}: Importe NaN/Vacío.")
