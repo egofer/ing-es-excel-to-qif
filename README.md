@@ -1,34 +1,33 @@
-# ING ES Excel to QIF Converter 🏦➡️🧾
+# ING Excel to QIF Converter 🏦➡️🧾
 
 ## Descripción
 
-Este script de Python convierte los archivos de movimientos de cuenta descargados en formato Excel (`.xls` o `.xlsx`) desde la web de **ING España (ING BANK NV, Sucursal en España)** al formato **QIF (Quicken Interchange Format)**.
+Este script de Python convierte los archivos de movimientos de cuenta descargados en formato Excel (`.xls` o `.xlsx`) desde la web de **ING España (ING BANK NV, Sucursal en España)** al formato **QIF (Quicken Interchange Format)**. El script extrae los detalles de la transacción y coloca el texto descriptivo principal (comercio, persona, etc.) en el campo Memo del QIF, dejando vacío el campo Beneficiario.
 
 ## Motivación
 
-ING España permite descargar los movimientos de cuenta en formato Excel, pero muchas aplicaciones populares de finanzas personales como [KMyMoney](https://kmymoney.org/), [GnuCash](https://www.gnucash.org/), [HomeBank](https://www.gethomebank.org), o versiones antiguas de Quicken, funcionan mejor o únicamente con archivos QIF.
+ING España permite descargar los movimientos de cuenta en formato Excel, pero muchas aplicaciones populares de finanzas personales como [KMyMoney](https://kmymoney.org/), [GnuCash](https://www.gnucash.org/) (con plugin QIF), o versiones antiguas de Quicken, funcionan mejor o únicamente con archivos QIF.
 
-Este script automatiza el proceso de conversión, extrayendo la información relevante del Excel de ING Direct y formateándola correctamente en un archivo QIF, ahorrando tiempo y esfuerzo manual. Está especialmente optimizado para la estructura y los patrones de descripción encontrados comúnmente en los extractos de ING España.
+Este script automatiza el proceso de conversión, extrayendo la información relevante del Excel de ING y formateándola en un archivo QIF listo para importar, con el texto descriptivo clave en el campo Memo para facilitar la identificación y categorización posterior.
 
 ## ✨ Características principales
 
 *   **Lee formato Excel ING:** Procesa archivos `.xls` y `.xlsx` descargados de ING.
 *   **Conversión a QIF:** Genera un archivo QIF estándar (`!Type:Bank`) listo para importar.
-*   **Extracción inteligente de beneficiario (Payee):**
-    *   Identifica y elimina prefijos comunes ("Pago en ", "Bizum recibido de ", "Transferencia...", etc.).
-    *   Intenta extraer nombres de comercios o entidades que suelen estar en MAYÚSCULAS.
-    *   Si no encuentra un patrón en mayúsculas, utiliza el resto de la descripción como beneficiario (útil para nombres propios o descripciones complejas como "24 ( VEINTE Y CUATRO) ALICANTE ES").
-*   **Mapeo de Categorías:** Combina las columnas `CATEGORÍA` y `SUBCATEGORÍA` del Excel en el campo Categoría (`L`) del QIF, usando dos puntos (`:`) como separador jerárquico (ej: `LAlimentación:Supermercados y alimentación`).
-*   **Memo detallado:**
-    *   Utiliza la columna `COMENTARIO` del Excel como parte del Memo (`M`) del QIF.
-    *   Identifica el tipo de transacción por el prefijo (Pago, Bizum, Transferencia, Devolución) y lo añade al Memo como `Tipo: [Keyword]` (ej. `MTipo: Bizum`).
+*   **Extracción de texto descriptivo (para Memo):**
+    *   Identifica y elimina prefijos comunes ("Pago en ", "Bizum recibido de ", "Transferencia...", etc.) de la descripción.
+    *   Intenta extraer nombres de comercios o entidades que suelen estar en MAYÚSCULAS del texto restante.
+    *   Si no encuentra un patrón en mayúsculas, utiliza el *resto de la descripción* (tras quitar el prefijo) como texto principal.
+    *   Este texto extraído se coloca en el campo **Memo (`M`)** del archivo QIF.
+*   **Beneficiario QIF Vacío:** El campo Beneficiario (`P`) del QIF se deja **intencionadamente vacío**.
+*   **Mapeo de categorías:** Combina las columnas `CATEGORÍA` y `SUBCATEGORÍA` del Excel en el campo Categoría (`L`) del QIF, usando dos puntos (`:`) como separador jerárquico (ej: `LAlimentación:Supermercados y alimentación`).
 *   **Manejo de formatos españoles:** Parsea correctamente importes con coma decimal y fechas en formato `DD/MM/YYYY`.
-*   **Validación de datos:**
+*   **Validación de Datos:**
     *   Comprueba que las columnas esenciales estén presentes.
     *   Valida que las fechas sean válidas y estén en un rango razonable.
     *   Valida que los importes sean numéricos, omitiendo filas con datos inválidos.
-*   **Codificación Flexible:** Permite elegir la codificación del archivo QIF de salida (`utf-8` por defecto, recomendado para compatibilidad con acentos).
-*   **Modo verboso:** Incluye una opción `-v` para mostrar información detallada del procesamiento y depuración.
+*   **Codificación flexible:** Permite elegir la codificación del archivo QIF de salida (`utf-8` por defecto, recomendado para compatibilidad con acentos).
+*   **Modo Verbose:** Incluye una opción `-v` para mostrar información detallada del procesamiento y depuración.
 *   **Modular:** El código está estructurado en funciones para facilitar su lectura y mantenimiento.
 
 ## ⚙️ Requisitos e instalación
@@ -47,7 +46,7 @@ Este script automatiza el proceso de conversión, extrayendo la información rel
 El script se ejecuta desde la línea de comandos:
 
 ```bash
-python ingxls2qif.py [opciones] <archivo_excel_entrada>
+python xls_to_qif.py [opciones] <archivo_excel_entrada>
 ```
 
 **Argumentos:**
@@ -65,97 +64,66 @@ python ingxls2qif.py [opciones] <archivo_excel_entrada>
 
 *   **Conversión básica (salida por defecto `movimientos.qif`):**
     ```bash
-    python ingxls2qif.py movimientos.xls
+    python xls_to_qif.py movimientos.xlsx
     ```
 *   **Especificando archivo de salida:**
     ```bash
-    python ingxls2qif.py mis_movimientos.xls -o extracto_enero_2025.qif
+    python xls_to_qif.py mis_movimientos.xls -o extracto_enero_2025.qif
     ```
 *   **Activando modo detallado:**
     ```bash
-    python ingxls2qif.py extracto_banco.xls -v
-    ```
-*   **Usando codificación diferente (menos común):**
-    ```bash
-    python ingxls2qif.py extracto_banco.xlsx --encoding cp1252
+    python xls_to_qif.py extracto_banco.xlsx -v
     ```
 
 ## 📄 Formato del archivo Excel de entrada (esperado)
 
 El script está diseñado para funcionar con la estructura típica de los archivos Excel descargados desde la web de ING España. Espera encontrar:
 
-1.  Algunas filas iniciales con metadatos (Número de cuenta, Titular, Fecha exportación). El script intenta leer esta información pero no es crítica para la conversión.
-2.  **Una fila de cabecera EXACTA** con los siguientes nombres de columna (el script la busca en las primeras 15 filas):
+1.  Algunas filas iniciales con metadatos.
+2.  **Una fila de cabecera EXACTA** con los siguientes nombres de columna (buscada en las primeras 15 filas):
     ```
     F. VALOR, CATEGORÍA, SUBCATEGORÍA, DESCRIPCIÓN, COMENTARIO, IMAGEN, IMPORTE (€), SALDO (€)
     ```
 3.  Las filas de datos de transacciones debajo de la cabecera.
 
-**¡Importante!** Si ING cambia significativamente la estructura o los nombres de las columnas en sus exportaciones futuras, el script podría necesitar ajustes.
+**¡Importante!** Si ING cambia la estructura o los nombres de columna, el script podría necesitar ajustes.
 
 ## 🧾 Formato del archivo QIF de salida
 
-El script genera un archivo QIF estándar (`!Type:Bank`) que debería ser compatible con la mayoría de software que soporta este formato. Los campos se mapean de la siguiente manera:
+El script genera un archivo QIF estándar (`!Type:Bank`). Los campos se mapean de la siguiente manera:
 
 *   `D`: Fecha (Formato `MM/DD/YYYY`)
 *   `T`: Importe (con punto decimal)
-*   `P`: Beneficiario/Pagador (Extraído de la descripción)
+*   `P`: **(VACÍO)** - Este campo se deja en blanco intencionadamente.
 *   `L`: Categoría (Formato `Categoría:Subcategoría` del Excel)
-*   `M`: Memo/Nota (Contiene el `COMENTARIO` del Excel y/o `Tipo: [Keyword]`)
+*   `M`: Memo/Nota (Contiene el texto descriptivo extraído de la descripción del Excel: comercio, persona, etc.)
 *   `^`: Separador de transacción
+
+*(Nota: El comentario original de la columna `COMENTARIO` del Excel no se incluye en el QIF resultante).*
 
 ## 🔧 Configuración y personalización
 
-Actualmente, la lógica principal (patrones de prefijo, regex de beneficiario, nombres de columna esperados) está definida dentro del script Python.
+Actualmente, la lógica principal (patrones de prefijo, regex de beneficiario, nombres de columna) está definida dentro del script.
 
-*   **Nombres de Columna:** Si ING cambia los nombres de columna, puedes intentar ajustar el diccionario `COL_MAP` al principio del script.
-*   **Prefijos:** Los patrones de prefijo se definen en la variable `PREFIX_PATTERN`. Puedes añadir o modificar patrones Regex aquí si encuentras nuevos tipos de transacción recurrentes.
-*   **Lógica de Extracción:** La función `extract_payee_and_keyword` contiene la lógica para determinar el beneficiario.
+*   **Nombres de Columna:** Puedes intentar ajustar `COL_MAP` si ING cambia los nombres.
+*   **Prefijos:** Los patrones se definen en `PREFIX_PATTERN`. Se usan solo para *limpiar* la descripción antes de extraer el texto para el Memo.
+*   **Lógica de Extracción:** La función `extract_memo_text` contiene la lógica para determinar el texto que va al campo Memo.
 
-Para personalizaciones más avanzadas, sería necesario modificar el código Python.
+Para personalizaciones más avanzadas, sería necesario modificar el código.
 
 ## ⚠️ Troubleshooting y problemas conocidos
 
-*   **Error "Cabecera no encontrada":** Asegúrate de que tu archivo Excel contiene la fila de cabecera exacta mencionada arriba y que está dentro de las primeras 15 filas. Verifica que no haya filas completamente vacías antes de la cabecera que puedan confundir a `pandas`.
-*   **Error "Faltan columnas requeridas":** Verifica que las columnas `F. VALOR`, `DESCRIPCIÓN`, e `IMPORTE (€)` existen en tu archivo Excel después de la fila de cabecera.
-*   **Caracteres Raros/Incorrectos (Acentos):** Si ves símbolos extraños en lugar de acentos o 'ñ' en el archivo QIF importado, asegúrate de que estás usando la codificación correcta. Prueba generando el archivo con la opción por defecto (`--encoding utf-8`). Si sigues teniendo problemas, podrías probar con `cp1252` o `iso-8859-1`, aunque `utf-8` es lo más recomendable. Se ha comprobado que hay casos en que el error de codificación se arrastra de los propios datos proporcionados por el banco.
-*   **Errores de Lectura de Excel:** Asegúrate de tener instaladas las bibliotecas `pandas`, `xlrd` y `openpyxl` (`pip install pandas xlrd openpyxl`). Si el archivo está protegido o corrupto, pandas no podrá leerlo.
-*   **Beneficiario Incorrecto:** Si el beneficiario extraído no es el esperado, revisa la descripción original y la lógica en `extract_payee_and_keyword`. Puedes usar el modo `-v` para ver cómo se procesa cada descripción.
+*   **Error "Cabecera no encontrada" / "Faltan columnas":** Verifica la estructura de tu archivo Excel y los nombres de columna contra los esperados.
+*   **Caracteres Raros/Incorrectos (Acentos):** Usa `--encoding utf-8` (opción por defecto).
+*   **Errores de Lectura Excel:** Asegúrate de tener `pandas`, `xlrd`, `openpyxl` instalados.
+*   **Memo (`M`) Inesperado:** Usa el modo `-v` para ver cómo se extrae el texto descriptivo de la descripción original y se asigna al campo Memo. Recuerda que el Beneficiario (`P`) estará vacío.
 
 ## 🔮 Posibles mejoras futuras
 
-*   **Archivo de configuración externo:** Mover los patrones de prefijo, mapeo de columnas y otras configuraciones a un archivo externo (JSON, YAML) para facilitar la personalización sin editar el script.
-*   **Reglas de mapeo avanzadas:** Implementar un sistema de reglas (quizás en el archivo de configuración) para mapear beneficiarios o descripciones específicas a categorías o beneficiarios QIF deseados por el usuario.
-*   **Interfaz gráfica (GUI):** Crear una interfaz simple para seleccionar archivos y opciones sin usar la línea de comandos.
+*   **Archivo de configuración externo:** Para patrones de prefijo, mapeo de columnas.
+*   **Reglas de Mapeo Avanzadas:** Para asignar Categorías (`L`) o incluso un Beneficiario (`P`) basado en reglas definidas por el usuario sobre el Memo (`M`).
+*   **Interfaz Gráfica (GUI).**
 
 ## 🤝 Contribuciones
 
-¡Las contribuciones son bienvenidas! Si encuentras errores, tienes sugerencias de mejora o quieres añadir nuevas funcionalidades, por favor, abre un "Issue" o envía un "Pull Request" en GitHub.
-
-## 📜 Licencia
-
-Este proyecto se distribuye bajo la Licencia MIT.
-
-```text
-MIT License
-
-Copyright (c) [Año] [Tu Nombre o Nombre del Repositorio]
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+¡Las contribuciones son bienvenidas! Abre un "Issue" o envía un "Pull Request" en GitHub.
