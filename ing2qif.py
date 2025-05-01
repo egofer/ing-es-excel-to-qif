@@ -45,10 +45,10 @@ COL_MAP = {
 }
 REQUIRED_COLS_INTERNAL = ['date', 'description', 'amount']
 
-# --- Compilación de regex ---
+# --- Compilación de Regex ---
+# PREFIX_PATTERN ahora solo se usa para *quitar* el prefijo, no para capturar keyword
 PREFIX_PATTERN = re.compile(
-    r"^(?:(Pago)\s+en\s+|(Bizum)\s+(?:recibido(?:\s+de)?|enviado(?:\s+a)?)\s+|(Transferencia)\s+(?:recibida(?:\s+de)?|internacional\s+emitida\s+[A-Z]\d+)\s+|(Devolución)\s+Tarjeta\s+)", re.VERBOSE | re.IGNORECASE)
-# ALL_CAPS_PATTERN ahora solo intenta hacer match, la lógica decide si usarlo
+    r"^(?:Pago\s+en\s+|Bizum\s+(?:recibido(?:\s+de)?|enviado(?:\s+a)?)\s+|Transferencia\s+(?:recibida(?:\s+de)?|internacional\s+emitida\s+[A-Z]\d+)\s+|Devolución\s+Tarjeta\s+)", re.VERBOSE | re.IGNORECASE)
 ALL_CAPS_PATTERN = re.compile(
     r"^([A-ZÁÉÍÓÚÑ0-9.*\/&-]+(?=\s|$)(?:\s+(?=[A-ZÁÉÍÓÚÑ0-9.*\/&-]+(?:\s|$))[A-ZÁÉÍÓÚÑ0-9.*\/&-]+)*)", re.VERBOSE)
 
@@ -58,7 +58,7 @@ ALL_CAPS_PATTERN = re.compile(
 def parse_arguments():
     """Parsea los argumentos de la línea de comandos."""
     parser = argparse.ArgumentParser(
-        description="Convierte extracto bancario Excel a QIF.",
+        description="Convierte extracto Excel ING a QIF",
         epilog="Ejemplo: python xls_to_qif.py extracto.xlsx -o salida.qif -v"
     )
     parser.add_argument("excel_file", help="Ruta al archivo Excel.")
@@ -72,7 +72,7 @@ def parse_arguments():
 
 
 def parse_spanish_decimal(decimal_val, row_num, verbose=False):
-    """Convierte valor a decimal, manejando formato español. Devuelve None si falla."""
+    """Convierte valor a Decimal, manejando formato español. Devuelve None si falla."""
     if pd.isna(decimal_val):
         if verbose:
             print(f"  [DEBUG] Fila {row_num}: Importe NaN/Vacío.")
@@ -95,6 +95,7 @@ def parse_spanish_decimal(decimal_val, row_num, verbose=False):
 
 def find_header_and_metadata(excel_filepath, expected_header, verbose=False):
     """Lee inicio del Excel para encontrar índice de cabecera y metadatos."""
+
     if verbose:
         print("Buscando cabecera y metadatos...")
     header_row_index = -1
@@ -115,7 +116,7 @@ def find_header_and_metadata(excel_filepath, expected_header, verbose=False):
             if verbose:
                 print(f"Cabecera detectada en índice {
                       header_row_index} (Fila Excel {header_row_index + 1}).")
-        if len(row_str) > 3:  # Extraer metadatos (simplificado)
+        if len(row_str) > 3:
             if "Número de cuenta:" in row_str[2]:
                 account_info['account_number'] = row_str[3]
             elif "Titular:" in row_str[2]:
@@ -133,6 +134,7 @@ def find_header_and_metadata(excel_filepath, expected_header, verbose=False):
 
 def read_excel_data(excel_filepath, header_row_index, verbose=False):
     """Lee los datos principales del Excel usando el índice de cabecera."""
+
     if verbose:
         print(f"Leyendo datos con cabecera en índice {header_row_index}...")
     try:
@@ -148,77 +150,81 @@ def read_excel_data(excel_filepath, header_row_index, verbose=False):
         return None
 
 
-def extract_payee_and_keyword(description, prefix_pattern, all_caps_pattern, verbose=False):
-    """Extrae beneficiario y keyword. FORZA FALLBACK si 'Todo Mayus' no consume todo."""
-    payee = None
-    keyword = None
+def extract_memo_text(description, prefix_pattern, all_caps_pattern, verbose=False):
+    """Extrae el texto descriptivo para el campo Memo (M) del QIF.
+
+    1. Intenta encontrar y eliminar un prefijo conocido.
+    2. Sobre el texto restante, intenta encontrar una secuencia inicial "Todo Mayúsculas".
+    3. Si la encuentra Y consume todo el texto restante, devuelve ese match.
+    4. Si la encuentra pero NO consume todo, o si no la encuentra, devuelve
+       TODO el texto restante (fallback).
+
+    Args:
+        description (str): Descripción de la transacción.
+        prefix_pattern (re.Pattern): Regex compilada para detectar prefijos.
+        all_caps_pattern (re.Pattern): Regex compilada (estricta) para detectar secuencias "Todo Mayúsculas".
+        verbose (bool, optional): Si es True, imprime mensajes de depuración. Default False.
+
+    Returns:
+        str | None: El texto extraído para el Memo, o None si no hay texto relevante.
+    """
+    memo_text = None
     remaining_text = description
 
     prefix_match = prefix_pattern.match(description)
     if prefix_match:
         remaining_text = description[prefix_match.end():].strip()
-        keyword = next(
-            (g for g in prefix_match.groups() if g is not None), None)
         if verbose:
             print(f"  [DEBUG] Prefijo: '{prefix_match.group(0)}'.")
-        if keyword:
-            keyword = keyword.capitalize()
-        if verbose and keyword:
-            print(f"  [DEBUG]   -> Keyword: '{keyword}'")
         if verbose:
             print(f"  [DEBUG] Restante: '{remaining_text}'")
     elif verbose:
         print("  [DEBUG] Prefijo NO Detectado.")
 
-    # Intentar extraer "Todo Mayúsculas"
+    # Lógica para determinar el texto que irá al MEMO
     if remaining_text:
         name_match_caps = all_caps_pattern.match(remaining_text)
         if name_match_caps:
             matched_caps_text = name_match_caps.group(1).strip()
-            # --- NUEVA COMPROBACIÓN ---
-            # ¿El match consumió todo el texto restante?
             if name_match_caps.end() == len(remaining_text):
-                # Sí, era un patrón "Todo Mayúsculas" genuino
-                payee = matched_caps_text
-                if verbose:
-                    print(f"  [DEBUG] Match Caps (completo) ÉXITO: '{payee}'")
-            else:
-                # No, coincidió solo parcialmente (ej. "24"). Forzar fallback.
-                if verbose:
-                    print(f"  [DEBUG] Match Caps PARCIAL ('{
-                          matched_caps_text}'). Forzando fallback.")
-                payee = remaining_text  # Usar todo el texto restante
+                memo_text = matched_caps_text  # Era Todo Mayus -> Memo = Match
                 if verbose:
                     print(
-                        f"  [DEBUG] Fallback (por match parcial) asignado: '{payee}'")
+                        f"  [DEBUG] Match Caps (completo) -> Texto para Memo: '{memo_text}'")
+            else:
+                if verbose:
+                    print(f"  [DEBUG] Match Caps PARCIAL ('{
+                          matched_caps_text}'). Forzando fallback para texto de Memo.")
+                memo_text = remaining_text  # Match parcial -> Memo = Texto restante
+                if verbose:
+                    print(
+                        f"  [DEBUG] Fallback (por match parcial) -> Texto para Memo: '{memo_text}'")
         else:
-            # El patrón "Todo Mayúsculas" no coincidió ni al principio
             if verbose:
                 print("  [DEBUG] Match Caps FALLÓ completamente.")
-            payee = remaining_text  # Fallback
+            memo_text = remaining_text  # No match -> Memo = Texto restante
             if verbose:
-                print(f"  [DEBUG] Fallback (por no match) asignado: '{payee}'")
+                print(
+                    f"  [DEBUG] Fallback (por no match) -> Texto para Memo: '{memo_text}'")
     elif verbose:
-        print("  [DEBUG] Texto restante VACÍO.")
+        print("  [DEBUG] Texto restante VACÍO -> Texto para Memo = None")
 
-    # Limpieza final
-    if payee:
-        payee = re.sub(r'\s{2,}', ' ', payee).strip()
-        if not payee:
-            payee = None
-    else:
-        payee = None
+    # Limpieza final del texto del memo
+    if memo_text:
+        memo_text = re.sub(r'\s{2,}', ' ', memo_text).strip()
+        if not memo_text:
+            memo_text = None
 
-    return payee, keyword
+    return memo_text
 
 
 def process_transaction_row(row, original_excel_row, col_map, prefix_pattern, all_caps_pattern, verbose=False):
-    """Procesa una fila del DataFrame y devuelve datos para QIF o None."""
+    """Procesa una fila del DataFrame y devuelve datos para QIF o None (P vacío, Desc->M)."""
     try:
         # --- Validación y Obtención Datos Críticos ---
         raw_date_val = row.get(col_map['date'])
         if pd.isna(raw_date_val) or str(raw_date_val).strip() == '':
-            return None  # Omitir fila
+            return None
         if isinstance(raw_date_val, datetime.datetime):
             tx_date = raw_date_val
         else:
@@ -234,11 +240,9 @@ def process_transaction_row(row, original_excel_row, col_map, prefix_pattern, al
                 print(f"  OMITIENDO fila {original_excel_row}: Fecha inválida '{
                       raw_date_val}'. {e}")
                 return None
-
         if not (REASONABLE_START_DATE <= tx_date <= REASONABLE_END_DATE):
             print(f"  AVISO: Fila {original_excel_row}: Fecha '{
                   tx_date.strftime('%d/%m/%Y')}' fuera rango.")
-
         raw_amount_val = row.get(col_map['amount'])
         amount = parse_spanish_decimal(
             raw_amount_val, original_excel_row, verbose)
@@ -249,28 +253,35 @@ def process_transaction_row(row, original_excel_row, col_map, prefix_pattern, al
         category_csv = str(row.get(col_map['category'], '')).strip()
         subcategory_csv = str(row.get(col_map['subcategory'], '')).strip()
         description = str(row.get(col_map['description'], '')).strip()
-        comment_csv = str(row.get(col_map['comment'], '')).strip()
 
-        # --- Extracción Beneficiario y Keyword ---
-        payee_for_qif, tag_keyword = extract_payee_and_keyword(
+        if verbose:
+            print(f"\n--- Fila Excel {original_excel_row} ---")
+            print(f"  [DEBUG] Desc: '{description}'")
+
+        # --- Extracción Texto para Memo ---
+        memo_text = extract_memo_text(
             description, prefix_pattern, all_caps_pattern, verbose)
         if verbose:
-            print(f"  [FINAL] Beneficiario (P): '{payee_for_qif}'")
+            print(f"  [FINAL] Texto (para Memo M): '{memo_text}'")
 
-        # --- Construcción Categoría y Memo ---
+        # --- Construcción Categoría ---
         category_parts = [part for part in [
             category_csv, subcategory_csv] if part]
         category_for_qif = ":".join(category_parts)
         if verbose:
             print(f"  [FINAL] Categoría (L): '{category_for_qif}'")
-        memo_items = [item for item in [comment_csv, f"Tipo: {
-            tag_keyword}" if tag_keyword else None] if item]
-        qif_memo = " // ".join(memo_items)
-        if verbose:
-            print(f"  [FINAL] Memo (M): '{qif_memo}'")
 
-        # --- Devolver datos ---
-        return {'date': tx_date, 'amount': amount, 'payee': payee_for_qif, 'category': category_for_qif, 'memo': qif_memo}
+        # --- Devolver datos con PAYEE = None y MEMO = memo_text ---
+        transaction_data = {
+            'date': tx_date,
+            'amount': amount,
+            'payee': None,             # <-- Payee siempre None
+            'category': category_for_qif,
+            'memo': memo_text          # <-- Texto extraído va al Memo
+        }
+        if verbose:
+            print(f"  [DEBUG] Datos procesados OK: {transaction_data}")
+        return transaction_data
 
     except Exception as e:
         print(
@@ -283,7 +294,7 @@ def process_transaction_row(row, original_excel_row, col_map, prefix_pattern, al
 
 
 def generate_qif_file(transactions, qif_filepath, output_encoding, verbose=False):
-    """Genera el archivo QIF a partir de la lista de transacciones procesadas."""
+    """Genera el archivo QIF (sin campo P)."""
     print(f"\nGenerando QIF: {qif_filepath} (Codificación: {output_encoding})")
     write_errors_mode = 'replace' if output_encoding.lower() != 'utf-8' else 'strict'
     try:
@@ -292,6 +303,7 @@ def generate_qif_file(transactions, qif_filepath, output_encoding, verbose=False
             for tx in transactions:
                 outfile.write(f"D{tx['date'].strftime('%m/%d/%Y')}\n")
                 outfile.write(f"T{tx['amount']:.2f}\n")
+                # La línea P no se escribirá porque tx['payee'] será None
                 if tx['payee']:
                     outfile.write(f"P{tx['payee']}\n")
                 if tx['category']:
@@ -300,7 +312,6 @@ def generate_qif_file(transactions, qif_filepath, output_encoding, verbose=False
                     outfile.write(f"M{tx['memo']}\n")
                 outfile.write("^\n")
         print(f"Archivo QIF creado: {qif_filepath}")
-        # ... (Recordatorios / Avisos) ...
         return True
     except Exception as e:
         print(f"Error Fatal escribiendo QIF: {e}")
@@ -312,7 +323,6 @@ def main():
     """Función principal que orquesta la conversión."""
     print("--- Recordatorio: Requiere 'pandas' y 'xlrd'/'openpyxl' ---")
     args = parse_arguments()
-    # ... (Determinar output_filename igual que antes) ...
     if args.output:
         output_filename = args.output
     else:
@@ -332,7 +342,7 @@ def main():
     if df_data is None:
         sys.exit(1)
 
-    # ... (Validación de columnas requeridas igual que antes) ...
+    # ... (Validación de columnas requeridas igual) ...
     current_columns = df_data.columns.tolist()
     missing_req_cols = [col_name for col_key, col_name in COL_MAP.items(
     ) if col_key in REQUIRED_COLS_INTERNAL and col_name not in current_columns]
@@ -345,6 +355,7 @@ def main():
     skipped_count = 0
     for idx, row in df_data.iterrows():
         original_excel_row = header_idx + 2 + idx
+        # Pasar las regex necesarias a process_transaction_row
         processed_data = process_transaction_row(
             row, original_excel_row, COL_MAP, PREFIX_PATTERN, ALL_CAPS_PATTERN, args.verbose
         )
@@ -362,8 +373,9 @@ def main():
         print("\nError Fatal: No se procesaron transacciones.")
         sys.exit(1)
     print("-" * 30)
-
     processed_transactions.sort(key=lambda x: x['date'])
+
+    # --- Generar QIF ---
     success = generate_qif_file(
         processed_transactions, output_filename, args.encoding, args.verbose)
 
