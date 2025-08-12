@@ -6,7 +6,7 @@ Este script de Python convierte los archivos de movimientos de cuenta descargado
 
 ## Motivación
 
-ING España permite descargar los movimientos de cuenta en formato Excel, pero muchas aplicaciones populares de finanzas personales como [KMyMoney](https://kmymoney.org/), [GnuCash](https://www.gnucash.org/) (con plugin QIF), o versiones antiguas de Quicken, funcionan mejor o únicamente con archivos QIF.
+ING España permite descargar los movimientos de cuenta en formato Excel, pero muchas aplicaciones populares de finanzas personales como [HomeBank](https://www.gethomebank.org), [KMyMoney](https://kmymoney.org/), [GnuCash](https://www.gnucash.org/) (con plugin QIF), o versiones antiguas de Quicken, funcionan mejor o únicamente con archivos QIF.
 
 Este script automatiza el proceso de conversión, extrayendo la información relevante del Excel de ING y formateándola en un archivo QIF listo para importar, con el texto descriptivo clave en el campo Memo para facilitar la identificación y categorización posterior.
 
