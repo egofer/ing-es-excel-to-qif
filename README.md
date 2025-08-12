@@ -64,15 +64,15 @@ python xls_to_qif.py [opciones] <archivo_excel_entrada>
 
 *   **Conversión básica (salida por defecto `movimientos.qif`):**
     ```bash
-    python xls_to_qif.py movimientos.xlsx
+    python ing2qif.py movimientos.xlsx
     ```
 *   **Especificando archivo de salida:**
     ```bash
-    python xls_to_qif.py mis_movimientos.xls -o extracto_enero_2025.qif
+    python ing2qif.py mis_movimientos.xls -o extracto_enero_2025.qif
     ```
 *   **Activando modo detallado:**
     ```bash
-    python xls_to_qif.py extracto_banco.xlsx -v
+    python ing2qif.pyy extracto_banco.xlsx -v
     ```
 
 ## 📄 Formato del archivo Excel de entrada (esperado)
