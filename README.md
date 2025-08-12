@@ -46,7 +46,7 @@ Este script automatiza el proceso de conversión, extrayendo la información rel
 El script se ejecuta desde la línea de comandos:
 
 ```bash
-python xls_to_qif.py [opciones] <archivo_excel_entrada>
+python ing2qif.py [opciones] <archivo_excel_entrada>
 ```
 
 **Argumentos:**
